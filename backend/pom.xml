@@ -13,7 +13,6 @@
     <artifactId>pet-fresh-service</artifactId>
     <version>1.0.0</version>
     <name>pet-fresh-service</name>
-    <description>AI-Assisted Pet Nutrition Recommendation and Fresh Food Inventory Management System</description>
 
     <properties>
         <java.version>17</java.version>

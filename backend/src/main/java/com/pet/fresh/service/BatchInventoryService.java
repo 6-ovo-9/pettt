@@ -15,14 +15,10 @@ public class BatchInventoryService {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    /**
-     * 核心算法：先进先出(FIFO)与近效期优先出库
-     */
     @Transactional(rollbackFor = Exception.class)
     public synchronized Map<String, Object> deductStockFIFO(Long goodsId, int quantity) {
         LocalDate today = LocalDate.now();
 
-        // 查询该商品尚未过期且拥有可用库存的所有批次，按到期日期由近到远(ASC)排序
         String selectSql = "SELECT id, batch_no, current_stock, expire_date FROM batch_inventory " +
                            "WHERE goods_id = ? AND current_stock > 0 AND expire_date >= ? " +
                            "ORDER BY expire_date ASC FOR UPDATE";
@@ -30,7 +26,7 @@ public class BatchInventoryService {
 
         int totalAvailable = batches.stream().mapToInt(b -> ((Number) b.get("current_stock")).intValue()).sum();
         if (totalAvailable < quantity) {
-            throw new RuntimeException("可用鲜食库存不足！剩余有效批次库存合计: " + totalAvailable + "，请求出库: " + quantity);
+            throw new RuntimeException("可用鲜食库存不足！剩余可用批次库存: " + totalAvailable + "，请求出库: " + quantity);
         }
 
         int remaining = quantity;
@@ -70,26 +66,17 @@ public class BatchInventoryService {
         return response;
     }
 
-    /**
-     * 自动定时巡检扫描：每小时执行一次，自动划分效期状态(正常/临期≤3天/已过期)
-     */
     @Scheduled(cron = "0 0 * * * ?")
     @Transactional
     public void autoCheckExpiryTask() {
         LocalDate today = LocalDate.now();
         LocalDate warningThreshold = today.plusDays(3);
 
-        // 1. 已到期置为2
         jdbcTemplate.update("UPDATE batch_inventory SET warning_status = 2 WHERE expire_date < ? AND warning_status != 2", today);
-
-        // 2. 临期但未过期置为1
         jdbcTemplate.update("UPDATE batch_inventory SET warning_status = 1 WHERE expire_date >= ? AND expire_date <= ? AND warning_status = 0",
                 today, warningThreshold);
     }
 
-    /**
-     * 获取库存大屏汇总指标
-     */
     public Map<String, Object> getInventoryDashboardStats() {
         Map<String, Object> stats = new HashMap<>();
 
@@ -101,12 +88,15 @@ public class BatchInventoryService {
         stats.put("warningStock", warningCount);
         stats.put("expiredStock", expiredCount);
 
-        // 获取各商品批次明细
-        String listSql = "SELECT b.id, b.batch_no, b.produce_date, b.expire_date, b.current_stock, b.storage_location, " +
-                         "b.warning_status, g.goods_name, g.category " +
+        String listSql = "SELECT b.id, b.goods_id, b.batch_no, b.produce_date, b.expire_date, b.current_stock, b.storage_location, " +
+                         "b.warning_status, g.goods_name, g.category, g.price " +
                          "FROM batch_inventory b JOIN fresh_goods g ON b.goods_id = g.id " +
                          "ORDER BY b.expire_date ASC";
         stats.put("batchList", jdbcTemplate.queryForList(listSql));
         return stats;
+    }
+
+    public List<Map<String, Object>> getAllGoods() {
+        return jdbcTemplate.queryForList("SELECT * FROM fresh_goods ORDER BY id ASC");
     }
 }
