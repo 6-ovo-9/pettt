@@ -28,7 +28,7 @@ public class PetFreshApiController {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    // 1. 登录接口
+    // 1. 登录
     @PostMapping("/auth/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> loginReq) {
         String username = loginReq.get("username");
@@ -37,7 +37,7 @@ public class PetFreshApiController {
         try {
             Map<String, Object> user = jdbcTemplate.queryForMap(
                 "SELECT id, username, password, nickname, role, status FROM sys_user WHERE username = ?", username);
-            
+
             if (user == null || !password.equals(user.get("password"))) {
                 return ResponseEntity.status(401).body(Map.of("code", 401, "message", "用户名或密码错误"));
             }
@@ -59,7 +59,7 @@ public class PetFreshApiController {
         }
     }
 
-    // 2. 用户注册接口
+    // 2. 注册
     @PostMapping("/auth/register")
     public ResponseEntity<?> register(@RequestBody Map<String, String> regReq) {
         String username = regReq.get("username");
@@ -82,7 +82,7 @@ public class PetFreshApiController {
         return ResponseEntity.ok(Map.of("code", 200, "message", "注册成功！请使用新账号登录。"));
     }
 
-    // 3. AI 营养配比测算接口
+    // 3. AI 测算
     @GetMapping("/nutrition/calculate")
     public ResponseEntity<?> calculateNutrition(
             @RequestParam String species,
@@ -95,40 +95,51 @@ public class PetFreshApiController {
         return ResponseEntity.ok(result);
     }
 
-    // 4. 保存宠物健康档案
+    // 4. 用户新建/保存宠物健康档案
     @PostMapping("/pet/profile/save")
     public ResponseEntity<?> savePetProfile(@RequestBody Map<String, Object> req) {
         Long userId = req.get("userId") != null ? Long.valueOf(req.get("userId").toString()) : 2L;
         String petName = (String) req.get("petName");
         String species = (String) req.get("species");
         String breed = (String) req.get("breed");
-        int ageMonths = ((Number) req.get("ageMonths")).intValue();
-        double weight = ((Number) req.get("weight")).doubleValue();
-        String activityLevel = (String) req.get("activityLevel");
-        boolean isNeutered = Boolean.parseBoolean(req.get("isNeutered").toString());
+        int ageMonths = req.get("ageMonths") != null ? ((Number) req.get("ageMonths")).intValue() : 12;
+        double weight = req.get("weight") != null ? ((Number) req.get("weight")).doubleValue() : 5.0;
+        String activityLevel = req.get("activityLevel") != null ? (String) req.get("activityLevel") : "NORMAL";
+        boolean isNeutered = req.get("isNeutered") != null && Boolean.parseBoolean(req.get("isNeutered").toString());
         String allergens = (String) req.get("allergens");
 
         jdbcTemplate.update("INSERT INTO pet_profile (user_id, pet_name, species, breed, age_months, weight, activity_level, is_neutered, allergens) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 userId, petName, species, breed, ageMonths, weight, activityLevel, isNeutered ? 1 : 0, allergens);
 
-        return ResponseEntity.ok(Map.of("code", 200, "message", "宠物健康档案保存成功！"));
+        return ResponseEntity.ok(Map.of("code", 200, "message", "宠物健康档案创建成功！"));
     }
 
-    // 5. 获取用户的宠物列表
+    // 5. 获取宠物档案列表 (支持权限隔离：管理员查看全部宠主建档并联查所属人，宠主仅看自己的)
     @GetMapping("/pet/profile/list")
-    public ResponseEntity<?> getPetProfiles(@RequestParam(defaultValue = "2") Long userId) {
-        List<Map<String, Object>> list = jdbcTemplate.queryForList("SELECT * FROM pet_profile WHERE user_id = ? ORDER BY id DESC", userId);
-        return ResponseEntity.ok(list);
+    public ResponseEntity<?> getPetProfiles(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(defaultValue = "ROLE_USER") String role) {
+        if ("ROLE_ADMIN".equals(role)) {
+            // 管理员端：查询全平台所有用户录入的宠物建档，并展示所属用户昵称与电话
+            String adminSql = "SELECT p.*, COALESCE(u.nickname, u.username, '散客') AS owner_name, u.phone AS owner_phone " +
+                              "FROM pet_profile p LEFT JOIN sys_user u ON p.user_id = u.id ORDER BY p.id DESC";
+            return ResponseEntity.ok(jdbcTemplate.queryForList(adminSql));
+        } else {
+            // 宠主端：严格按当前登录用户 ID 过滤
+            Long targetUserId = userId != null ? userId : 2L;
+            String userSql = "SELECT p.*, '我' AS owner_name FROM pet_profile p WHERE p.user_id = ? ORDER BY p.id DESC";
+            return ResponseEntity.ok(jdbcTemplate.queryForList(userSql, targetUserId));
+        }
     }
 
-    // 6. 获取所有鲜食商品
+    // 6. 获取鲜食商品列表
     @GetMapping("/goods/list")
     public ResponseEntity<?> getGoodsList() {
         return ResponseEntity.ok(inventoryService.getAllGoods());
     }
 
-    // 7. FIFO 批次出库接口
+    // 7. FIFO 出库
     @PostMapping("/inventory/deduct")
     public ResponseEntity<?> deductStock(@RequestParam Long goodsId, @RequestParam int quantity) {
         try {
@@ -139,7 +150,7 @@ public class PetFreshApiController {
         }
     }
 
-    // 8. 鲜食库存大屏数据
+    // 8. 库存大屏
     @GetMapping("/inventory/dashboard")
     public ResponseEntity<?> getDashboard() {
         return ResponseEntity.ok(inventoryService.getInventoryDashboardStats());

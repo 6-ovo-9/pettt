@@ -18,8 +18,8 @@ CREATE TABLE `sys_user` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户与管理员基础表';
 
 INSERT INTO `sys_user` (`id`, `username`, `password`, `nickname`, `phone`, `role`, `status`) VALUES
-(1, 'admin', '123456', '系统总管理员', '13800000000', 'ROLE_ADMIN', 1),
-(2, 'petlover', '123456', '铲屎官小李', '13900001111', 'ROLE_USER', 1);
+(1, 'admin', '123456', '系统管理员', '13800000000', 'ROLE_ADMIN', 1),
+(2, 'petlover', '123456', '铲屎官 (宠主用户)', '13900001111', 'ROLE_USER', 1);
 
 DROP TABLE IF EXISTS `pet_profile`;
 CREATE TABLE `pet_profile` (
