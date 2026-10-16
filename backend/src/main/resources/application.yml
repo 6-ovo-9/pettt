@@ -1,0 +1,15 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: pet-fresh-system
+  datasource:
+    url: jdbc:mysql://localhost:3306/pet_fresh_db?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: 226793
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+jwt:
+  secret: c2VjdXJlX3BldF9mcmVzaF9udXRyaXRpb25fc3lzdGVtXzIwMjZfa2V5XzEyMzQ1Njc4OQ==
+  expiration-ms: 86400000 # 24小时有效
